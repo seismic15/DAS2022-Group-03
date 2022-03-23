@@ -30,11 +30,19 @@ library(sjPlot)
 library(MASS)
 library(ROCR)
 library(descr)
+library(nnet)
+library(scales)
+
+#install.packages("remotes")
+#remotes::install_version("SDMTools", "1.1-221")
+# or using following code
+#install.packages('SDMTools',,'http://www.rforge.net/')
+library(SDMTools)
+
 #library(rms)
 #library(broom)
 #library(DALEX)
 #library(iBreakDown)
-library(nnet)
 #library(questionr)
 #library(car)
 #library(lattice)
@@ -599,13 +607,13 @@ roc.trump<-ggplot(perfd,aes(x=x, y=y))+geom_line()+
 roc.trump
 
 ```
-From the Figure \ref{fig:roc}, the AUC value is 0.812, which is larger than 0.5. So, it is better than the predicting randomly. We can adjust the threshold to calculate the accuracy and when we set the threshold as 0.51, we can see the accuracy is 70.6%. 
 
 ```{r}
 data1$predFull <- predict(model2,type="response",na.action=na.exclude)
-#confM <- confusion.matrix(data1$Total.Number.of.Family.members,data1$predFull,threshold = 0.51)
-#percent(round(sum(diag(confM))/sum(confM),2),0.01)
+confM <- confusion.matrix(data1$Total.Number.of.Family.members,data1$predFull,threshold = 0.51)
+percent(round(sum(diag(confM))/sum(confM),2),0.01)
 ```
+From the Figure \ref{fig:roc}, the AUC value is 0.812, which is larger than 0.5. So, it is better than the predicting randomly. We can adjust the threshold to calculate the accuracy and when we set the threshold as 0.51, we can see the accuracy is `r accuracy`. 
 
 ## Model comparison
 ### 9 variables or 7 variables
