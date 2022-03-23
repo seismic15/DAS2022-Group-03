@@ -626,7 +626,7 @@ From the plot (a) in Figure \ref{fig:prob1}, the probability of members declines
 p7 <- plot_model(model2, type = "pred", terms = "Type.single", title = "",
            axis.title = c("(g) Type.single", "Probability of more members"))
 
-grid.arrange(p3, ncol = 1)
+grid.arrange(p7, ncol = 1)
 ```
 
 Finally, we plot the ROC curve (receiver operating characteristic curve) and obtain the AUC value:
