@@ -114,8 +114,8 @@ At the beginning, we explore the data and analysis the original relationships. F
 
 ```{r, eval = TRUE, ig.width = 5, fig.height = 4, fig.align = "center", fig.cap = "\\label{fig:cor1} Correlations of all variables.", fig.pos = "H"}
 household %>%
-    mutate(log.Members.no = log(Members.no)) %>%
-    dplyr::select(log.Members.no, Income, Food.exp, Head.age, Area, House.age, Bedrooms.no) %>%
+    mutate(log.Member.no = log(Members.no)) %>%
+    dplyr::select(log.Member.no, Income, Food.exp, Head.age, Area, House.age, Bedrooms.no) %>%
     cor() %>%
     # Code reference:
     # http://www.sthda.com/english/wiki/visualize-correlation-matrix-using-correlogram
@@ -177,6 +177,15 @@ ggplot(household, aes(x = Members.no)) +
 Combined with the histogram and pie chart, we try to divide the 7 groups into 2 groups. The breakpoint is set at 4 members, which is the median. Then from Figure \ref{fig:pie2}, the 1-4 members group accounts for 51%.
 
 ```{r, fig.width = 4, fig.height = 3, fig.align = "center", fig.cap = "\\label{fig:pie2}The proportion of household into 2 groups", fig.pos = "H"}
+
+# Multi-classification
+points0 <- c(1, 4, 8, 12, 16)
+household$quantiles <- cut(household$Members.no, breaks = points0,
+                           include.lowest = TRUE)
+
+household %>% group_by(quantiles) %>% count() %>%
+  knitr::kable(caption = '\\label{tab:multi} Four-group classification', linesep = "", digits = 2) %>%
+  kableExtra::kable_styling(latex_options = 'HOLD_position')
 
 # We first cut Y into classes
 median.no <- quantile(household$Members.no, probs = c(0.5));
