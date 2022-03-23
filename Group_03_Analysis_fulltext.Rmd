@@ -35,9 +35,7 @@ library(descr)
 library(nnet)
 library(scales)
 
-# Add mirror for install.packages
-# Knitr produces a R session, without a default cran mirror. 
-install.packages("remotes",repos = "http://cran.us.r-project.org")
+# install.packages("remotes")
 # remotes::install_version("SDMTools", "1.1-221")
 # or using following code
 # install.packages('SDMTools',,'http://www.rforge.net/')
@@ -438,16 +436,30 @@ These three plots are the proportion barplots of Head.sex (top left of Figure \r
 Head.sex indicates that a large proportion in small households are female leaders (67.8%), while in more-member households are witnessed with more male heads (53.7%). For the histogram of Electricity, the difference is not obvious with fewer-member households may have a percentage of 50.6% having access to electricity, while 49.0% for larger household. However, the two groups still have different electricity means. 
 
 However, for Type, there are some interesting findings.
-```{r, echo = FALSE, eval = TRUE}
+```{r, echo = FALSE, eval = TRUE, fig.width = 4, fig.height = 3}
+
+household$Type2 = c("Single")
+household[household$Type == "Extended Family", "Type2"] = "Extended"
+household[household$Type == "Two or More Nonrelated Persons/Members", "Type2"] = "Include Nonrelated"
+
 # Check Type
 household %>% 
-  tabyl(quantiles, Type) %>% 
+  tabyl(quantiles, Type2) %>% 
   adorn_percentages() %>% 
   adorn_pct_formatting() %>% 
   adorn_ns() %>%
   knitr::kable(caption = '\\label{tab:type} The detail data of Type', linesep = "", digits = 2) %>%
   kableExtra::kable_styling(latex_options = 'HOLD_position')
 # To show original counts
+
+
+type.summarise <- household %>% group_by(quantiles, Type2) %>%
+  summarise(number=n())
+p4 <- ggplot(type.summarise, aes(x=Type2, y=number, fill=quantiles)) + 
+    geom_col() +
+    labs(y = "Count",x = "") +
+    theme(legend.position = "bottom")
+p4
 ```
 From the Table \ref{tab:type}, even though 5-16 members has a high proportion in the type of two and more nonrelated members, the total amounts of observation is too small to treat as a class that is same as the other two class. Thus, we combine the extended family and two and more nonrelated members into one group and then there are only two types: single family and nonsingle family.
 
@@ -812,14 +824,15 @@ kable(summary5$coefficients, caption = "\\label{tab:summary5}Parameter estimates
 ```
 In this analysis, we choose the logit model. Now we also check that whether other kinds of GLMs are suitable for the dataset.
 
-Take the poisson model as a example, all the p values of these variables shows that they are significant. Therefore, we next check its residuals and assumptions:
 
 ```{r,fig.width = 5, fig.height = 5, fig.align = "center", fig.cap = "\\label{fig:poires}", fig.pos = "H"}
 
 # Calculate the dispersion parameter:
 pearson <- residuals(poisson.model, type = "pearson")
-sum(pearson**2) / poisson.model$df.residual
+dp <- sum(pearson**2) / poisson.model$df.residual
 ## [1] 0.7135002
+
+Take the poisson model as a example, all the p values of these variables shows that they are significant. Since the dispersion parameter is `r round(dp, 4)`, we do not need to adjust the standard error. Therefore, we next task is to check the residuals:
 
 # Residual plots vs. predicted (using standardised residuals):
 #------------------------------------------------
