@@ -39,7 +39,7 @@ install.packages("remotes")
 # remotes::install_version("SDMTools", "1.1-221")
 # or using following code
 # install.packages('SDMTools',,'http://www.rforge.net/')
-# library(SDMTools)
+library(SDMTools)
 
 #library(rms)
 #library(broom)
