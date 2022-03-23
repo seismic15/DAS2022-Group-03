@@ -35,7 +35,7 @@ library(descr)
 library(nnet)
 library(scales)
 
-install.packages("remotes")
+# install.packages("remotes")
 # remotes::install_version("SDMTools", "1.1-221")
 # or using following code
 # install.packages('SDMTools',,'http://www.rforge.net/')
@@ -801,14 +801,15 @@ kable(summary5$coefficients, caption = "\\label{tab:summary5}Parameter estimates
 ```
 In this analysis, we choose the logit model. Now we also check that whether other kinds of GLMs are suitable for the dataset.
 
-Take the poisson model as a example, all the p values of these variables shows that they are significant. Therefore, we next check its residuals and assumptions:
 
 ```{r,fig.width = 5, fig.height = 5, fig.align = "center", fig.cap = "\\label{fig:poires}", fig.pos = "H"}
 
 # Calculate the dispersion parameter:
 pearson <- residuals(poisson.model, type = "pearson")
-sum(pearson**2) / poisson.model$df.residual
+dp <- sum(pearson**2) / poisson.model$df.residual
 ## [1] 0.7135002
+
+Take the poisson model as a example, all the p values of these variables shows that they are significant. Since the dispersion parameter is `r round(dp, 4)`, we do not need to adjust the standard error. Therefore, we next task is to check the residuals:
 
 # Residual plots vs. predicted (using standardised residuals):
 #------------------------------------------------
