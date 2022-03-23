@@ -28,16 +28,18 @@ library(janitor)
 library(gridExtra)
 library(sjPlot)
 library(MASS)
+# install.packages("ROCR")
+# install.packages("descr")
 library(ROCR)
 library(descr)
 library(nnet)
 library(scales)
 
-#install.packages("remotes")
-#remotes::install_version("SDMTools", "1.1-221")
+install.packages("remotes")
+# remotes::install_version("SDMTools", "1.1-221")
 # or using following code
-#install.packages('SDMTools',,'http://www.rforge.net/')
-library(SDMTools)
+# install.packages('SDMTools',,'http://www.rforge.net/')
+# library(SDMTools)
 
 #library(rms)
 #library(broom)
@@ -110,7 +112,8 @@ At the beginning, we explore the data and analysis the original relationships. F
 
 ```{r, eval = TRUE, ig.width = 5, fig.height = 4, fig.align = "center", fig.cap = "\\label{fig:cor1} Correlations of all variables.", fig.pos = "H"}
 household %>%
-    dplyr::select(Members.no, Income, Food.exp, Head.age, Area, House.age, Bedrooms.no) %>%
+    mutate(log.Members.no = log(Members.no)) %>%
+    dplyr::select(log.Members.no, Income, Food.exp, Head.age, Area, House.age, Bedrooms.no) %>%
     cor() %>%
     # Code reference:
     # http://www.sthda.com/english/wiki/visualize-correlation-matrix-using-correlogram
@@ -363,7 +366,7 @@ household <- household %>%
 ggplot(household, aes(x = log(Food.exp), y = Members.no)) +
     #geom_point(aes(color = income.groups , fill = income.groups ), size=2, alpha = 0.4) +
     geom_jitter(aes(color = income.groups , fill = income.groups ), size=2, alpha = 0.4) +
-    geom_smooth(method = "lm", se = FALSE, aes(color = income.groups , fill = income.groups ), size = 1)+
+    geom_smooth(method = "lm", se = FALSE, aes(color = income.groups , fill = income.groups ), size = 2.5)+
     xlim(9, 13) + ylim(0, 10.5) +
     theme(legend.position = "bottom")
 
@@ -425,7 +428,7 @@ However, for Type, there are some interesting findings.
 ```{r, echo = FALSE, eval = TRUE}
 # Check Type
 household %>% 
-  tabyl(Type, quantiles) %>% 
+  tabyl(quantiles, Type) %>% 
   adorn_percentages() %>% 
   adorn_pct_formatting() %>% 
   adorn_ns() %>%
@@ -437,17 +440,23 @@ From the Table \ref{tab:type}, even though 5-16 members has a high proportion in
 
 ```{r, fig.width = 7, fig.height = 3, fig.align = "center", fig.cap = "\\label{fig:box4}The boxplot of Type in different groups", fig.pos = "H"}
 
-type1 <- ggplot(data = household, aes(x = Type, y = Members.no, fill = Type)) +
+household$Type2 = c("Single")
+household[household$Type == "Extended Family", "Type2"] = "Extended"
+household[household$Type == "Two or More Nonrelated Persons/Members", "Type2"] = "Include Nonrelated"
+
+type1 <- ggplot(data = household, aes(x = Type2, y = Members.no, fill = Type)) +
     geom_boxplot() +
-    labs(x = "Type", y = "Members.no") + 
-    theme(legend.position = "none", title = element_text(size = 16))
+    labs(x = "", y = "") + 
+    theme(legend.position = "none") +
+    scale_fill_manual(values=c("#E69F00","#56B4E9", "#999999"))
 
 household <- household %>% 
-  mutate(Type.single = ifelse(Type=="Single Family", "Yes", "No"))
+  mutate(Type.single = ifelse(Type=="Single Family", "Single", "Other two"))
 type2 <- ggplot(data = household, aes(x = Type.single, y = Members.no, fill = Type.single)) +
     geom_boxplot() +
-    labs(x = "Type single", y = "Members.no") + 
-    theme(legend.position = "none", title = element_text(size = 16))
+    labs(x = "", y = "") + 
+    theme(legend.position = "none", title = element_text(size = 16)) +
+    scale_fill_manual(values=c("#E69F00", "#56B4E9"))
 
 grid.arrange(type1, type2, ncol = 2)
 
@@ -798,6 +807,9 @@ In the future, we can improve the model performance by adding more meaningful va
 
 
 # Reference
-(Sharma R. (2013). The Family and Family Structure Classification Redefined for the Current Times. Journal of family medicine and primary care, 2(4), 306–310. https://doi.org/10.4103/2249-4863.123774)
+Sharma R. (2013). The Family and Family Structure Classification Redefined for the Current Times. Journal of family medicine and primary care, 2(4), 306–310. https://doi.org/10.4103/2249-4863.123774)
 
+Anderson, K. L., & Allen, W. R. (1984). Correlates of Extended Household Structure. Phylon (1960-), 45(2), 144–157. https://doi.org/10.2307/274476
+
+Hussien, W.A., Memon, F.A. & Savic, D.A. Assessing and Modelling the Influence of Household Characteristics on Per Capita Water Consumption. Water Resour Manage 30, 2931–2955 (2016). https://doi.org/10.1007/s11269-016-1314-x
 
