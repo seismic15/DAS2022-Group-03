@@ -1,0 +1,841 @@
+---
+title: "Analysis about the number of people living in one household"
+output:
+  pdf_document:
+    number_sections: yes
+    latex_engine: xelatex
+  word_document: default
+fig_caption: yes
+---
+
+```{r setup, include=FALSE, eval = TRUE}
+knitr::opts_chunk$set(echo = FALSE, eval = TRUE, warning=FALSE, message=FALSE)
+```
+
+
+```{r,echo = FALSE, message = FALSE}
+library(dplyr)
+library(moderndive)
+library(ISLR)
+library(skimr)
+library(plotly)
+library(tidyr)
+library(jtools)
+library(kableExtra)
+library(corrplot)
+library(ggplot2)
+library(janitor)
+library(gridExtra)
+library(sjPlot)
+library(MASS)
+# install.packages("ROCR")
+# install.packages("descr")
+library(ROCR)
+library(descr)
+library(nnet)
+library(scales)
+
+#install.packages("remotes")
+# remotes::install_version("SDMTools", "1.1-221")
+# or using following code
+# install.packages('SDMTools',,'http://www.rforge.net/')
+library(SDMTools)
+
+#library(rms)
+#library(broom)
+#library(DALEX)
+#library(iBreakDown)
+#library(questionr)
+#library(car)
+#library(lattice)
+#library(caret)
+```
+
+# Introduction
+
+Family Income and Expenditure Survey (FIES) is a survey which is undertaken every three years in the Philippines. It is aimed at providing data on family income and expenditure.  In this survey, household unit is composed of family units. Sharma (2013) regarded the family as a functional unit of society. It functions in an economic, social or emotional sense. Hence, the structure of it and those influential factors behind it are of much importance. 
+
+This analysis explore the relationships between the number of household members and the other properties of household structure in **Northern Mindanao**, Philippines. We analyse all the 10 variables, modify some variables (such as dividing/combining groups and log-transformation) and then select significant variables to establish a logit model.
+
+According to several analyses, we find the best model to fit the dataset. The number of members in household is divided into 2 groups: 1-4 members and more than 5 members. 3 variables are excluded: annual household income, household area and the number of bedrooms. Then there are 6 variables: Annual expenditure by the household on food, head of the households sex, head of the households age, relationship between the group of people living in the house, age of the building, and whether the house have electricity are the final variables included. They influence the number of members living in a household.
+
+Among these 6 variables, food expenditure has the strongest influence. By comparison, the house age and head age only influence the outcomes slightly. The other 3 indicator variables are contribute moderately. If household has properties: non-electricity, male head, and more than one family, then there is a higher probability that the house includes more than 5 members in a household.
+
+
+# Exploratory analysis
+
+## Data summary
+Since the data is all about the region of Northern Mindanao, then there are 10 variables we should consider in this analysis:
+
+- **Total.Number.of.Family.members** – Number of people living in the house
+
+- **Total.Household.Income** – Annual household income (in Philippine peso)
+
+- **Total.Food.Expenditure** – Annual expenditure by the household on food (in Philippine peso)
+
+- **Household.Head.Sex** – Head of the households sex
+
+- **Household.Head.Age** – Head of the households age (in years)
+
+- **Type.of.Household** – Relationship between the group of people living in the house
+
+- **House.Floor.Area** – Floor area of the house (in $m^2$)
+
+- **House.Age** – Age of the building (in years)
+
+- **Number.of.bedrooms** – Number of bedrooms in the house
+
+- **Electricity** – Does the house have electricity? (1 = Yes, 0 = No)
+
+All these variables are displayed in the Table \ref{tab:datahead}, which shows the head data of the dataset.
+
+```{r, echo = FALSE, eval = TRUE}
+
+# Dataset prepare
+data <- read.csv("dataset3.csv")
+
+# Ignore the region and rename
+household <- data[,-2]
+colnames(household) <- c("Income", "Food.exp", "Head.sex", "Head.age", "Type", "Members.no", "Area", "House.age", "Bedrooms.no", "Elec.")
+
+# Check is there any NA in data
+#cat("\n Check is there any NA in data \n")
+#apply(household, 2, function(x) any(is.na(x))) # No NAs in data
+
+# Move our response variable to the first
+household <- household %>%
+  relocate("Members.no") # Use dplyr::relocate to move to the front
+head(household) %>%   
+  knitr::kable(caption = '\\label{tab:datahead} The head of dataset', linesep = "", digits = 2) %>%
+  kableExtra::kable_styling(latex_options = 'HOLD_position')
+
+```
+At the beginning, we explore the data and analysis the original relationships. Figure \ref{fig:cor1} shows us the correlations of parts of variables. We find that most of them have no relationships with the number of family members but have relationships between each others.
+
+```{r, eval = TRUE, ig.width = 5, fig.height = 4, fig.align = "center", fig.cap = "\\label{fig:cor1} Correlations of all variables.", fig.pos = "H"}
+household %>%
+    mutate(log.Members.no = log(Members.no)) %>%
+    dplyr::select(log.Members.no, Income, Food.exp, Head.age, Area, House.age, Bedrooms.no) %>%
+    cor() %>%
+    # Code reference:
+    # http://www.sthda.com/english/wiki/visualize-correlation-matrix-using-correlogram
+    corrplot(type="upper",
+             addCoef.col = "black", # Add coefficient of correlation
+             tl.col="black", tl.srt=45, #Text label color and rotation
+             diag=FALSE) # hide correlation coefficient on the principal diagonal
+```
+However, we can not deny there is no relationship between the number of family members and the other variables. Next step is to modify the data and find a new distribution to check whether there are relationships. 
+
+## Modification
+
+### Total number of family members
+First, we look at the proportion of each number of households in Figure \ref{fig:pie1}. In this pie chart, we divide the data of this variables in to 7 groups: 1 member, 2 members, 3 members, 4 members, 5 members, 6 members and 7 members and more. 
+
+```{r, fig.width = 4, fig.height = 3, fig.align = "center", fig.cap = "\\label{fig:pie1}The proportion of household by the number of members", fig.pos = "H"}
+household <- household %>% 
+  mutate(Members.group = as.character(Members.no))
+household[household$Members.no == 1, "Members.group"] = c("1 person")
+household[household$Members.no == 2, "Members.group"] = c("2 people") 
+household[household$Members.no == 3, "Members.group"] = c("3 people") 
+household[household$Members.no == 4, "Members.group"] = c("4 people") 
+household[household$Members.no == 5, "Members.group"] = c("5 people") 
+household[household$Members.no == 6, "Members.group"] = c("6 people") 
+household[household$Members.no >= 7 & household$Members.no <=16, "Members.group"] = c("7 or more people") 
+
+prop.y.group <- household %>%
+  group_by(Members.group) %>%
+  count()%>%
+  mutate(prop = round(n / nrow(household), 2))
+#prop.y.group
+
+ggplot(prop.y.group, aes(x = "", y = n, fill=Members.group)) +
+         # Create a bar first
+         geom_bar(width = 1, stat = "identity") +
+          
+         # Then do pie chart
+         coord_polar("y", start=0) +
+         # Use color palettes from RColorBrewer package
+         scale_fill_brewer(palette="Dark2") +
+         # Blank the axis text and labs
+         theme(axis.text.x=element_blank()) +
+         labs(x="", y="", title="Proportion of households")
+
+```
+In Figure \ref{fig:pie1}, we find that all the groups share similar proportion except the 1 member group. Obviously the 7 groups will easier than original data (with 16 groups and maximum 16 members which is shown in Figure \ref{fig:hist1}) but it is still too much to fit a model. Assuming that the data had been random sampled, we can get a proportion of 49% of the households contained 5 or more people in this region of Philippine. 
+
+```{r, fig.width = 4, fig.height = 3, fig.align = "center", fig.cap = "\\label{fig:hist1}The distribution of household by the number of members", fig.pos = "H"}
+# summary of response varibale
+#household %>% select(Members.no) %>% skim()
+#unique(household$Members.no)
+
+max.no <- max(household$Members.no)
+ggplot(household, aes(x = Members.no)) +
+  # Set bins as max(Members.no)
+  geom_histogram(bins = max.no, fill = "#0038A8", col = "white") +
+  labs(main = "Total number of family members in Northern Mindanao")
+```
+Combined with the histogram and pie chart, we try to divide the 7 groups into 2 groups. The breakpoint is set at 4 members, which is the median. Then from Figure \ref{fig:pie2}, the 1-4 members group accounts for 51%.
+
+```{r, fig.width = 4, fig.height = 3, fig.align = "center", fig.cap = "\\label{fig:pie2}The proportion of household into 2 groups", fig.pos = "H"}
+
+# We first cut Y into classes
+median.no <- quantile(household$Members.no, probs = c(0.5));
+#median.no
+# Median.no is 4
+
+# Binary classification
+points1 <- c(1, 4, 16)
+
+household$quantiles <- cut(household$Members.no, breaks = points1,
+                           include.lowest = TRUE, labels = c("1-4", "5-16"))
+# household$quantiles <- cut(household$Members.no, breaks = points2,
+#                           include.lowest = TRUE, labels = c("1-4","5-8","9-12","13-16"))
+
+prop.y.group <- household %>%
+  group_by(quantiles) %>%
+  count()
+  
+ggplot(prop.y.group, aes(x = "", y = n, fill=quantiles)) +
+         # Create a bar first
+         geom_bar(width = 1, stat = "identity") +
+         # Then do pie chart
+         coord_polar("y", start=0) +
+         # Use color palettes from RColorBrewer package
+         scale_fill_brewer(palette="Dark2") +
+         # Blank the axis text and labs
+         theme(axis.text.x=element_blank()) +
+         labs(x="", y="", title="Proportion of households by household size")
+
+```
+
+### Log-transformation of numeric variables
+Next, we inspect the other variables. From the Figure \ref{tab:datahead}, we notice that there are 2 variables whose the orders of magnitude are much more than the others. It is foreseeable that the much variability will influence the final model. Thus, we transform the unit of currency int kPHP, which means that 1 kPHP = 1000 peso.
+
+```{r, }
+household <- household %>%
+  mutate(Income.kPHP = Income/1000, Food.exp.kPHP= Food.exp/1000)
+
+group.vars <- c("Elec.", "Type", "Head.sex")
+num.vars <- c("Income.kPHP", "Food.exp.kPHP", "Area", "House.age", "Bedrooms.no", "Head.age")
+# Code from DAS example sourcecode
+func_my_skim <- skim_with()
+func_my_skim(household[,num.vars])  %>%
+  dplyr::select(-skim_type) %>%
+  kable(col.names = c("Variable", "Missing", "Complete", "Mean", "SD", "Min.", "1st Q.", "Median", "3rd Q.", "Max.", "Hist"),
+        caption = '\\label{tab:summary} Summary statistics on teaching and beauty scores.',
+        booktabs = TRUE, digits = 2) %>%
+  kable_styling(font_size = 10, latex_options = "hold_position")
+
+```
+However, in the Table \ref{tab:summary}, the distributions of these economic numeric variables are extremely skewed. Considering the property of linear model, a log-transformation is more suitable than simply divide 1000 to reduce orders of magnitude for those economic covariates.
+
+In addition, the left boxplot of Figure \ref{fig:box1} is the boxplot of income grouped by number of members. We can find that besides the skewed distributions, there are lots of outliers, which is also not suitable for linear model. Hence, it is necessary to make a log-transformation and the outcomes are represented in the right boxplot of Figure \ref{fig:box1}.
+
+```{r, fig.width = 7, fig.height = 3, fig.align = "center", fig.cap = "\\label{fig:box1}The boxplot of income", fig.pos = "H"}
+## Why we use log-transform
+
+# Plotting with continuous variables
+# Income, Food.exp, head.age
+# ------------------ Income------------------------- #
+p1 <- ggplot(data = household, aes(x = as.factor(quantiles), y = Income, fill = as.factor(quantiles))) +
+    geom_boxplot() +
+    labs(x = "Member groups", y = "Income")+ 
+    geom_hline(yintercept = median(log(household$Income)),
+                              linetype = "dashed") +
+    theme(legend.position = "none") +
+    labs(title = "Income")
+
+p1.log <-ggplot(data = household, aes(x = as.factor(quantiles), y = log(Income), fill = as.factor(quantiles))) +
+    geom_boxplot() +
+    labs(x = "Member groups", y = "Log(Income)")+ 
+    geom_hline(yintercept = median(log(household$Income)),
+                              linetype = "dashed") +
+    theme(legend.position = "none") +
+    labs(title = "log(Income)")
+#p1; p1.log
+
+grid.arrange(p1, p1.log, ncol = 2, nrow = 1)
+```
+After the log-transformation, we notice that the order of magnitude of income is reduced successfully and similar to other variables. Then the variability become stable. The number of outliers is also reduced and the distributions are not extremely skewed.
+
+Similarly, we repeat the step on *Food.exp*, *Area*.
+
+```{r, fig.width = 7, fig.height = 3, fig.align = "center", fig.cap = "\\label{fig:box2}The boxplot of log(income) and log(food.exp)", fig.pos = "H"}
+library(gridExtra)
+
+# Plotting with numerical variables
+# Income, Food.exp, head.age
+# ------------------ Income------------------------- #
+p1 <-ggplot(data = household, aes(x = as.factor(quantiles), y = log(Income), fill = as.factor(quantiles))) +
+    geom_boxplot() +
+    labs(x = "Member groups", y = "Log(Income)")+ 
+    geom_hline(yintercept = median(log(household$Income)),
+                              linetype = "dashed") +
+    theme(legend.position = "none") +
+    labs(title = "log(income)")
+
+# ------------------ Food.exp ------------------------- #
+p2 <- ggplot(data = household, aes(x = as.factor(quantiles), y = log(Food.exp), fill = as.factor(quantiles))) +
+    geom_boxplot() +
+    labs(x = "Member groups", y = "Log(food.exp)")+ 
+    geom_hline(yintercept = median(log(household$Food.exp)),
+                              linetype = "dashed") +
+    theme(legend.position = "none") +
+    labs(title = "log(food.exp)")
+
+
+grid.arrange(p1, p2,  ncol = 2)
+```
+In Figure \ref{fig:box2}, the dashed line represents the mean of variables. Obviously, we find that the larger size households tend to earn more income and spend more on food expenditure: In income, the minimum that boxplot shows in group 5-16 is much greater than the group 1-4. In food expenditure, besides the minimum difference, the gap is wider, since the 25% percentile of larger households’ spending nearly reach the 75% percentile of the smaller ones. Thus, both of them are significant variables.
+
+```{r, fig.width = 7, fig.height = 7, fig.align = "center", fig.cap = "\\label{fig:box3}The boxplot of house age, head age, bedroom number and area", fig.pos = "H"}
+library(gridExtra)
+
+# ------------------ House.age ------------------------- #
+p3 <- ggplot(data = household, aes(x = as.factor(quantiles), y = House.age, fill = as.factor(quantiles))) +
+    geom_boxplot() +
+    labs(x = "", y = "house.age")+ 
+    theme(legend.position = "none") +
+    geom_hline(yintercept = median(household$House.age), 
+               linetype = "dashed") +
+    labs(title = "House age")
+
+# ------------------ Head.age ------------------------- #
+p4 <- ggplot(data = household, aes(x = as.factor(quantiles), y = Head.age, fill = as.factor(quantiles))) +
+    geom_boxplot() +
+    labs(x = "", y = "Head.age")+ 
+    # Add a mean age line
+    geom_hline(yintercept = median(household$Head.age), 
+               linetype = "dashed") +
+    theme(legend.position = "none") +
+    labs(title = "Head age")
+
+# ------------------ Bedrooms.no ------------------------- #
+p5 <- ggplot(data = household, aes(x = as.factor(quantiles), y = Bedrooms.no, fill = as.factor(quantiles))) +
+    geom_boxplot() +
+    labs(x = "", y = "Bedrooms.no")+ 
+    theme(legend.position = "none") +
+    labs(title = "Bedroom number")
+
+# ------------------ Area ------------------------- #
+p6.log <-ggplot(data = household, aes(x = as.factor(quantiles), y = log(Area), fill = as.factor(quantiles))) +
+    geom_boxplot() +
+    labs(x = "", y = "Log Area")+ 
+    theme(legend.position = "none") +
+    labs(title = "log(area)")
+
+# p3, p4 are significantly different
+# While other two are not
+grid.arrange(p3, p4, p5, p6.log, ncol = 2)
+
+```
+Investigating the other four variables, we notice the slight difference in the house age and head age may raise concern. We should check whether it is a significant predictor of the odds of a household being small or large size. On the contrary, other two of them (house bedroom number and floor area) are found not significantly different between the two groups. Then we consider that these two variables may not useful for our model and it should be double checked when we make the models.
+
+### Correlation and multicollinearity
+
+```{r,  fig.width = 4, fig.height = 4, fig.align = "center", fig.cap = "\\label{fig:cor2}The correlation of modified data", fig.pos = "H"}
+household <- mutate(household, 
+                    Income.log = log(Income),
+                    Food.exp.log = log(Food.exp))
+
+#Corrplot
+household %>%
+    dplyr::select(Members.no, Income.log, Food.exp.log, Head.age, House.age) %>%
+    cor() %>%
+    # Code reference:
+    # http://www.sthda.com/english/wiki/visualize-correlation-matrix-using-correlogram
+    corrplot(type="upper",
+             addCoef.col = "black", # Add coefficient of correlation
+             tl.col="black", tl.srt=45, #Text label color and rotation
+             diag=FALSE) # hide correlation coefficient on the principal diagonal
+```
+There are high correlations in Figure \ref{fig:cor2} between annual income and annual food expenditure, though the economic issues are among the top points in the government concerning. Then, we should find out a method to include these two core economic features but reduce the influence of multicollinearity. 
+
+```{r, fig.width = 5, fig.height = 3, fig.align = "center", fig.cap = "\\label{fig:scatter1}The interaction plot of income and food expenditure", fig.pos = "H"}
+
+prop.points <- quantile(log(household$Income), probs=c(0, 0.25, 0.5, 0.75, 1.0))
+# Back the log transfrom
+income.points <- exp(prop.points);
+#income.points
+##      0%        25%        50%        75%       100% 
+##  16238.00   85544.49  131806.00  249175.42 2598050.00 
+
+household <- household %>%
+  # Add Income groups
+  #mutate(income.groups = cut(Income/1000, breaks=c(0, 132, 249, 1e10),labels=c("< 132 thousand PHP", "132 - 249", "249 and more")))
+  mutate(income.groups = cut(Income/1000, breaks=c(0, 249, 1e10),labels=c("< 249,000 Peso", "249,000 Peso and more")))
+
+ggplot(household, aes(x = log(Food.exp), y = Members.no)) +
+    #geom_point(aes(color = income.groups , fill = income.groups ), size=2, alpha = 0.4) +
+    geom_jitter(aes(color = income.groups , fill = income.groups ), size=2, alpha = 0.4) +
+    geom_smooth(method = "lm", se = FALSE, aes(color = income.groups , fill = income.groups ), size = 2.5)+
+    xlim(9, 13) + ylim(0, 10.5) +
+    theme(legend.position = "bottom")
+
+```
+Then we try to divide income into two groups to find the difference. By setting the breakpoint 249,000 Peso, we obtained a plot of simple interaction regression lines between two variables. From the plot, we find that the slopes difference between two lines are not very distinct. Thus, the two groups of incomes may not make a  significant difference. 
+
+### Other group variables
+There are still three class variables and now we inspect their distributions.
+
+```{r, fig.width = 10, fig.height = 8, fig.align = "center", fig.cap = "\\label{fig:hist2}The distribution of class variables", fig.pos = "H"}
+# Code from lab9
+# use the janitor package to summarise this data in a table format:
+#household %>% 
+#  tabyl(Head.sex, quantiles) %>% 
+#  adorn_percentages() %>% 
+#  adorn_pct_formatting() %>% 
+#  adorn_ns() # To show original counts
+
+p1 <- ggplot(household, aes(x= as.factor(quantiles),  y = ..prop.., group=Head.sex, fill=Head.sex)) + 
+    geom_bar(position="dodge", stat="count") +
+    labs(y = "Proportion",x = "", main = "Barplot of Members.no by Head.sex")
+
+# Check Type
+#household %>% 
+#  tabyl(Type, quantiles) %>% 
+#  adorn_percentages() %>% 
+#  adorn_pct_formatting() %>% 
+#  adorn_ns() # To show original counts
+
+p2 <- ggplot(household, aes(x= as.factor(quantiles),  y = ..prop.., group=Type, fill=Type)) + 
+    geom_bar(position="dodge", stat="count") +
+    labs(y = "Proportion",x = "", main = "Barplot of Members.no by type")
+
+# Check Electricity
+#household %>% 
+#  tabyl(Elec., quantiles) %>% 
+#  adorn_percentages() %>% 
+#  adorn_pct_formatting() %>% 
+#  adorn_ns() # To show original counts
+household$Elec. <- as.factor(household$Elec.)
+p3 <- ggplot(household, aes(x= as.factor(quantiles),  y = ..prop.., 
+                            group=Elec., fill=Elec.)) + 
+    geom_bar(position="dodge", stat="count") +
+    labs(y = "Proportion",x = "", main = "Barplot of Members.no by electricity") +
+    ylim(0, 0.6)
+
+library(gridExtra)
+p1 <- p1 + theme(legend.position = "bottom")
+p2 <- p2 + theme(legend.position = "bottom")
+p3 <- p3 + theme(legend.position = "bottom")
+grid.arrange(p1, p3, p2,  ncol = 2)
+
+```
+These three plots are the proportion barplots of Head.sex (top left of Figure \ref{fig:hist2}), Electricity (top right of Figure \ref{fig:hist2}) and Type (bottom left of Figure \ref{fig:hist2}) in different member groups and their own class. 
+
+Head.sex indicates that a large proportion in small households are female leaders (67.8%), while in more-member households are witnessed with more male heads (53.7%). For the histogram of Electricity, the difference is not obvious with fewer-member households may have a percentage of 50.6% having access to electricity, while 49.0% for larger household. However, the two groups still have different electricity means. 
+
+However, for Type, there are some interesting findings.
+```{r, echo = FALSE, eval = TRUE}
+# Check Type
+household %>% 
+  tabyl(quantiles, Type) %>% 
+  adorn_percentages() %>% 
+  adorn_pct_formatting() %>% 
+  adorn_ns() %>%
+  knitr::kable(caption = '\\label{tab:type} The detail data of Type', linesep = "", digits = 2) %>%
+  kableExtra::kable_styling(latex_options = 'HOLD_position')
+# To show original counts
+```
+From the Table \ref{tab:type}, even though 5-16 members has a high proportion in the type of two and more nonrelated members, the total amounts of observation is too small to treat as a class that is same as the other two class. Thus, we combine the extended family and two and more nonrelated members into one group and then there are only two types: single family and nonsingle family.
+
+```{r, fig.width = 7, fig.height = 3, fig.align = "center", fig.cap = "\\label{fig:box4}The boxplot of Type in different groups", fig.pos = "H"}
+
+household$Type2 = c("Single")
+household[household$Type == "Extended Family", "Type2"] = "Extended"
+household[household$Type == "Two or More Nonrelated Persons/Members", "Type2"] = "Include Nonrelated"
+
+type1 <- ggplot(data = household, aes(x = Type2, y = Members.no, fill = Type)) +
+    geom_boxplot() +
+    labs(x = "", y = "") + 
+    theme(legend.position = "none") +
+    scale_fill_manual(values=c("#E69F00","#56B4E9", "#999999"))
+
+household <- household %>% 
+  mutate(Type.single = ifelse(Type=="Single Family", "Single", "Other two"))
+type2 <- ggplot(data = household, aes(x = Type.single, y = Members.no, fill = Type.single)) +
+    geom_boxplot() +
+    labs(x = "", y = "") + 
+    theme(legend.position = "none", title = element_text(size = 16)) +
+    scale_fill_manual(values=c("#E69F00", "#56B4E9"))
+
+grid.arrange(type1, type2, ncol = 2)
+
+```
+From the boxplots of two group criteria of Type, we notice that even though we merge the two groups together, the new two groups differ each other significantly. Thus, it is a better structure for model.
+
+# Model and analysis
+
+## Final model and outcomes
+Since our target variable has been divided into two groups, we choose the logit regression model:
+
+$$
+\log(\frac{p_i}{1-p_i}) = \alpha + \beta_1 \log(x_{1i}) +\beta_2 log(x_{2i}) +\beta_3 x_{3i} +  \beta_4 \mbox{I}(x_{4i}) + \beta_5 \mbox{I}(x_{5i}) + \beta_6 \mbox{I}(x_{6i}) + \epsilon_i,
+$$
+where 
+
+- $p_i$ denotes the **Number of people living in the house (1 = 5 or more, 0 = less than 4)**;
+
+- $x_1$ denotes the **Annual expenditure by the household on food (in Philippine peso)**;
+
+- $x_2$ denotes the **Head of the households age (in years)** ;
+
+- $x_3$ denotes the **Age of the building (in years)**;
+
+- $x_4$ denotes the **Whether the house have electricity? (1 = Yes, 0 = No)**;
+
+- $x_5$ denotes the **Head of the households sex**;
+
+- $x_6$ denotes the **Household type**;
+
+- $\alpha$ denotes the **intercept** of the regression line;
+
+- $\beta_i$ are the **coefficients** for the explanatory variables $x_i$; 
+
+- $\epsilon_i$ denotes the $i^{th}$ random error component,which are normally distributed with mean zero and variance $\sigma^2$.
+
+- $\mbox{I}(x)$ is the indicator function that:
+$$
+\mathbb{I}(x_{4i}) = \left\{
+      \begin{array}{ll}
+      1 ~~~ \mbox{The house have electricity},\\
+      0 ~~~ \mbox{otherwise}.\\
+      \end{array}
+      \right.
+$$
+$$
+\mathbb{I}(x_{5i}) = \left\{
+      \begin{array}{ll}
+      1 ~~~ \mbox{The sex of households Head is male},\\
+      0 ~~~ \mbox{otherwise}.\\
+      \end{array}
+      \right.
+$$
+and
+$$
+\mathbb{I}(x_{6i}) = \left\{
+      \begin{array}{ll}
+      1 ~~~ \mbox{The household type is single family},\\
+      0 ~~~ \mbox{otherwise}.\\
+      \end{array}
+      \right.
+$$
+
+Therefore, our next step is to estimate the parameters and outcomes are shown as follow:
+
+```{r, }
+data1 <- data
+data1 <- data1 %>% 
+    mutate(Type.single = ifelse(Type.of.Household =="Single Family","1", "0"))
+data1[,"Total.Number.of.Family.members"] <- ifelse(data1[,"Total.Number.of.Family.members"] > median(data1[,"Total.Number.of.Family.members"]),1,0)
+
+data1$Total.Number.of.Family.members<-as.factor(data1$Total.Number.of.Family.members)
+data1$Type.single<-as.factor(data1$Type.single)
+data1$Household.Head.Sex<-as.factor(data1$Household.Head.Sex)
+data1$Electricity<-as.factor(data1$Electricity)
+
+#levels(data1$Total.Number.of.Family.members)
+
+model2 <- glm(Total.Number.of.Family.members ~ 
+                   log(Total.Food.Expenditure)+
+                   Household.Head.Age+
+                   House.Age+
+                   Electricity+
+                   Household.Head.Sex+
+                   Type.single,family = binomial(link = "logit"), data = data1)
+summary2 <- summary(model2)
+
+#CI
+a <- round(confint(model2), 6)
+#a[2,] <- exp(a[2,])
+#a[2,] <- exp(a[3,])
+colnames(a) <- c("lower CI", "upper CI")
+rownames(a) <- c("(Intercept)","Total Food Expenditure","Household Head Age","House Age","Have electricity","Household Head Male","Type single")
+kable(cbind(summary2$coefficients, a), caption = "\\label{tab:summary2}Parameters estimates") %>%
+  kable_styling(latex_options = 'HOLD_position')
+
+#R2
+logreg <- LogRegR2(model2)
+
+```
+
+As the Table \ref{tab:summary2} represents, all the parameters of model are statistically significant with p-values that less than 0.05 and confidence intervals that not contain zero. Besides, we obtain other statistics: the AIC value is `r round(summary2$aic, 4)`, null deviance is `r round(summary2$null.deviance, 4)`, residual deviance is `r round(summary2$deviance, 4)`, and McFadden's R^2 is `r round(logreg$RL2, 4)`.
+
+Therefore, from the Table \ref{tab:summary2} and Table \ref{tab:ci}, we can say that the total food expenditure is strongest variable that effect the number of household members positively,  considering the change of order of magnitude between log-transformed data and raw data. The next two variables with slightly effects on the household members are head age and house age and both of their coefficients are negative. The last three variables effect more directly. If the household does not have electricity, the head of household is male, and there are more than one family living in the house, the number of members tends to be more than that has contrary features.
+
+In addition, we do the exponential process on the two log-transformed variables and then the new confidence intervals of raw data are:
+```{r}
+a[2,] <- exp(a[2,])
+kable(a, caption = "\\label{tab:ci}Confidence interval of raw data") %>%
+  kable_styling(latex_options = "HOLD_position")
+```
+From the Table \ref{tab:ci}, we also find that the confidence intervals are not including zero, thus all of estimates of parameters are statistically significant.
+
+Next, we analyse the odds ratios of the model.
+```{r, fig.width = 6, fig.height = 4, fig.align = "center", fig.cap = "\\label{fig:odds}The odds ratios", fig.pos = "H"}
+#Coef
+coefi <- model2 %>% coef()
+#kable(coefi, caption = "\\label{tab:coef}Coefficients")
+
+#Reducing the income of total household
+#Increasing the expenditure of food
+#The less age of the head in household, the more the number
+#The less house age
+#House that does not have electricity
+#The head of the household is male
+#Single family is not good
+
+#odds ratio plot
+plot_model(model2, show.values = TRUE, title = "Odds ratios", show.p = FALSE)
+```
+Based on the Figure \ref{fig:odds}, we find that for each unit decrease in the food expenditure, the family members will increase, while for each unit increase in the house age and the head of household age, the family members will decrease. The odds of more family members in houses that have electricity are only 0.49 times of those houses that have no electricity. On the contrary, the odds of more family members in male head of household are 2.2 times those of female head of household. Finally, the single type’s odds of more family members are 0.26 times those of other types. 
+
+
+Thirdly, we plot the probability trends between more family members and all other explanatory variables and all of these plot are shown in the Figure \ref{fig:prob}.
+```{r, fig.width = 8, fig.height = 9, fig.align = "center", fig.cap = "\\label{fig:prob1}The probability of more members", fig.pos = "H"}
+#probability variables pro plot
+
+p1 <- plot_model(model2, type = "pred", terms = "Total.Food.Expenditure", title = "",
+           axis.title = c("(a) Total.Food.Expenditure", "Probability of more members"))
+p2 <- plot_model(model2, type = "pred", terms = "Household.Head.Age", title = "",
+           axis.title = c("(b) Household.Head.Age", "Probability of more members"))
+p3 <- plot_model(model2, type = "pred", terms = "House.Age", title = "",
+           axis.title = c("(c) House.Age", "Probability of more members"))
+p4 <- plot_model(model2, type = "pred", terms = "Electricity", title = "",
+           axis.title = c("(d) Electricity", "Probability of more members"))
+p5 <- plot_model(model2, type = "pred", terms = "Household.Head.Sex", title = "",
+           axis.title = c("(e) Household.Head.Sex", "Probability of more members"))
+p6 <- plot_model(model2, type = "pred", terms = "Type.single", title = "",
+           axis.title = c("(f) Type.single", "Probability of more members"))
+
+grid.arrange(p1, p2, p3, p4, p5, p6, ncol = 2)
+```
+From the plot (a) in Figure \ref{fig:prob1}, which is the plot of food expenditure, we witness that the line increases dramatically before 100,000 peso and then become flat. In plot (b) and (c), the slope of head of household age and house age decrease with steady paces. Besides, plot (d), (e) and (f) are plot of three categorical variables. Finally, we can conclude that more expenditure, houses with no electricity, male head of household and single type of relationship will lead to more family members. 
+
+Finally, we plot the ROC curve (receiver operating characteristic curve) and obtain the AUC value:
+
+```{r, fig.width = 4, fig.height = 3, fig.align = "center", fig.cap = "\\label{fig:roc}The ROC curve", fig.pos = "H"}
+#ROC
+data1$predFull<-predict(model2,type="response",na.action=na.exclude)
+score<-prediction(data1$predFull,data1$Total.Number.of.Family.members)
+perf<-performance(score,"tpr","fpr")
+auc<-performance(score,"auc")
+perfd<-data.frame(x=perf@x.values[1][[1]],y=perf@y.values[1][[1]])
+roc.trump<-ggplot(perfd,aes(x=x, y=y))+geom_line()+
+  xlab("False postive rate")+ylab("True positive rate")+
+  ggtitle(paste("Area under the curve:",round(auc@y.values[[1]],3)))
+roc.trump
+
+data1$predFull <- predict(model2,type="response",na.action=na.exclude)
+confM <- confusion.matrix(data1$Total.Number.of.Family.members,data1$predFull,threshold = 0.51)
+accuracy <- percent(round(sum(diag(confM))/sum(confM),2),0.01)
+```
+From the Figure \ref{fig:roc}, the AUC value is 0.812, which is larger than 0.5. So, it is better than the predicting randomly. We can adjust the threshold to calculate the accuracy and when we set the threshold as 0.51, we can see the accuracy is `r accuracy`. 
+
+## Model comparison
+### 9 variables or 6 variables
+
+In section 2, we find that there are two variables that do not show significant difference between the two member groups and they are not included in the final model. Then we check whether it is better to choose all 9 variables or not.
+
+The model of 9 variables is:
+
+$$
+\log(\frac{p_i}{1-p_i}) = \alpha + \beta_1 \log(x_{1i}) +\beta_2 log(x_{2i}) +\beta_3 x_{3i} + \beta_4 \mbox{I}(x_{4i}) + \beta_5 \mbox{I}(x_{5i}) + \beta_6 \mbox{I}(x_{6i}) + \beta_7 \log(x_{7i}) + \beta_8 \log(x_{8i}) + \beta_9 x_{9i} + \epsilon_i,
+$$
+where 
+
+- $x_7$ denotes the **Annual household income (in Philippine peso)**;
+
+- $x_8$ denotes the **Floor area of the house (in $m^2$)**;
+
+- $x_9$ denotes the **Number of bedrooms in the house**;
+
+and the other variables and parameters are same as the model of 7 variable.
+
+Then we fit the model and obtain the estimates:
+```{r, echo = FALSE, eval = TRUE}
+model1 <-  glm(Total.Number.of.Family.members ~
+                   log(House.Floor.Area)+
+                   Number.of.bedrooms+
+                   log(Total.Household.Income)+
+                   log(Total.Food.Expenditure)+
+                   Household.Head.Age+
+                   House.Age+
+                   Electricity+
+                   Household.Head.Sex+
+                   Type.single, family = binomial(link = "logit"),data = data1)
+summary1 <- summary(model1)
+
+kable(summary1$coefficients, caption = "\\label{tab:summary1}Parameters estimates") %>%
+  kable_styling(latex_options = 'HOLD_position')
+```
+As the Table \ref{tab:summary1} shown, house area and number of bedroom are not statistically significant. Then they may not suitable for the model.
+
+Next, our task is to check the fact again by optimising model and the outcomes are shown as follow:
+```{r}
+#optimise model1
+step1 <- stepAIC(model1,trace=0)
+
+#optimise estimates
+kable(step1$coefficients, caption = "\\label{tab:step1}Optimised estimates of 9 variables") %>%
+  kable_styling(latex_options = 'HOLD_position')
+```
+Making the comparison of Table \ref{tab:step1} and Table \ref{tab:summary2}, we find that the algorithm also excludes these two variables, which indicates that the AIC of 9 variables model (`r round(summary1$aic, 4)`) are greater than that of 7 variables model (`r round(summary2$aic, 4)`). Hence, the two variables cannot contribute to our model.
+
+Also, we notice that the coefficients of income and food expenditure are negative and positive respectively. There might be a Simpson's paradox considering the test interaction plot (Figure \ref{fig:scatter1}) and high positive correlation. Thus, we exclude the income based on the correlation between income and members and the other 6 variables are included.
+
+### Different number of groups in members
+When we explore the data, we divide the members into two groups: 1-4 members and 5-16 mambers. However, it also can be divided into three or four groups in practice. Therefore, we should check outcomes of all these models to find the best one.  
+
+```{r, echo = FALSE, eval = TRUE}
+#nultinominal three categories and four categories
+data_cut <- data
+data_cut <- data_cut[order(data_cut$Total.Number.of.Family.members,decreasing = T),]
+data_cut$Total.Number.of.Family.members <- cut(data_cut$Total.Number.of.Family.members, breaks = c(1,4,8,12,16), labels = c('low1','low2','high1','high2'))
+model_four <- multinom(Total.Number.of.Family.members~
+        log(Total.Food.Expenditure)+
+        Household.Head.Sex+
+        Type.of.Household+
+        House.Age+
+        Electricity+
+        Household.Head.Age, 
+        probabilities = TRUE, model = TRUE, trace = FALSE, data = data_cut)
+summary4 <- summary(model_four)
+
+data2 <- data
+data2 <- data2 %>%
+    mutate(Num3 = data2$Total.Number.of.Family.members)
+data2<-data2[order(data2$Num3,decreasing = T),]
+data2$Num3<-cut(data2$Num3,breaks=c(1,5,7,16),labels=c('low','median','high'))
+data2$Num3<-as.factor(data2$Num3)
+model_three<-multinom(Num3~
+        log(Total.Food.Expenditure)+
+        Household.Head.Sex+
+        Type.of.Household+
+        House.Age+
+        Electricity+
+        Household.Head.Age,
+        probabilities = TRUE, model = TRUE, trace = FALSE, data=data2)
+summary3 <- summary(model_three)
+
+class.compare1 <- data.frame(c(summary2$aic, summary2$deviance),
+                            c(summary3$aic, summary3$deviance),
+                            c(summary4$aic, summary4$deviance),
+                            row.names = c("AIC", "Residual deviance"))
+names(class.compare1) <- c("2 groups", "3 groups", "4 groups")
+class.compare1 <- t(class.compare1)
+
+kable(class.compare1, caption = "\\label{tab:class1}Statistics of different group standard in household members") %>%
+  kable_styling(latex_options = 'HOLD_position')
+```
+Hence, from Table \ref{tab:class1}, we confirm that the 2 groups standard is the best one for out data. 
+
+### Different number of groups in types
+Besides, we combine two class in household type together as a new class and then there are only two types in the variable household type: single family and not single family.
+
+```{r, echo = FALSE, eval = TRUE}
+#used
+model1.1 <-  glm(Total.Number.of.Family.members ~ 
+                   log(Total.Food.Expenditure)+
+                   Household.Head.Age+
+                   House.Age+
+                   Electricity+
+                   Household.Head.Sex+
+                   Type.of.Household, family = binomial(link = "logit"),data = data1)
+summary1.1 <- summary(model1.1)
+
+kable(summary1.1$coefficients, caption = "\\label{tab:summary1.1}Parameter estimates of 3 type household") %>%
+  kable_styling(latex_options = 'HOLD_position')
+```
+The p value of the two and more nonrelated members is not statistically significant, thus this group standard is not a good choice even though in 3 groups of type, there is a slightly better AIC value as the Table \ref{tab:class2}.
+
+```{r}
+class.compare2 <- data.frame(c(summary1.1$aic, summary1.1$deviance),
+                            c(summary2$aic, summary2$deviance),
+                            row.names = c("AIC", "Residual deviance"))
+names(class.compare2) <- c("2 groups", "3 groups")
+class.compare2 <- t(class.compare2)
+
+kable(class.compare2, caption = "\\label{tab:class2}Statistics of different group standard") %>%
+  kable_styling(latex_options = 'HOLD_position')
+```
+
+### Poisson or logit
+
+```{r, }
+data2 <- read.csv("dataset3.csv")
+data2 <- data2 %>% 
+  mutate(Type.single = ifelse(Type.of.Household =="Single Family", "Yes", "No"))
+
+poisson.model <- glm(Total.Number.of.Family.members ~ 
+                       #log(Total.Household.Income)+
+                       log(Total.Food.Expenditure) + 
+                       Household.Head.Age + 
+                       House.Age + 
+                       Electricity + 
+                       Household.Head.Sex + 
+                       Type.single , family = poisson, data = data2)
+summary5 <- summary(poisson.model)
+
+kable(summary5$coefficients, caption = "\\label{tab:summary5}Parameter estimates of poisson model") %>%
+  kable_styling(latex_options = 'HOLD_position')
+
+```
+In this analysis, we choose the logit model. Now we also check that whether other kinds of GLMs are suitable for the dataset.
+
+
+```{r}
+# Calculate the dispersion parameter:
+pearson <- residuals(poisson.model, type = "pearson")
+dp <- sum(pearson**2) / poisson.model$df.residual
+## [1] 0.7135002
+```
+
+Take the poisson model as a example, all the p values of these variables shows that they are significant. Since the dispersion parameter is `r round(dp, 4)`, we do not need to adjust the standard error. Therefore, we next task is to check the residuals:
+```{r,fig.width = 5, fig.height = 5, fig.align = "center", fig.cap = "\\label{fig:poires}", fig.pos = "H"}
+# Residual plots vs. predicted (using standardised residuals):
+#------------------------------------------------
+# Make use of rstandard()
+# Get Std. residuals
+stand.resid <- rstandard(model = poisson.model, type = "pearson")
+fitted.values <-  predict(poisson.model, type = "response")# "response" = y, default = log(y)
+
+plot(x = fitted.values, y = stand.resid, 
+     xlab = "fitted.values", ylab = "Standardized Pearson residuals", ylim = c(-5,5))
+abline(h = c(-3, -2, 0, 2, 3), lty = "dotted", col = "red")
+
+```
+
+Obviously, there is not a random residual pattern in Poisson model as the Figure \ref{fig:poires} illustrated. The assumptions checking failed. Thus, Poisson is not appropriate model for our dataset.
+
+
+# Conclusion
+According to several analyses, we find the best model to fit the dataset. In summary, there are 6 variables that could influence the number of people living in a household:
+
+- **Total.Food.Expenditure** – Annual expenditure by the household on food (in Philippine peso)
+
+- **Household.Head.Sex** – Head of the households sex
+
+- **Household.Head.Age** – Head of the households age (in years)
+
+- **Type.of.Household** – Relationship between the group of people living in the house
+
+- **House.Age** – Age of the building (in years)
+
+- **Electricity** – Does the house have electricity? (1 = Yes, 0 = No)
+
+The household area and the number of bedrooms does not have influence. 
+
+The target variable is divided into 2 groups: 1-4 members in a household and more than 5 members in a household. In the other 6 variables, influence of total food expenditure is the most strongest variables. In contrast, the house age and head age only have slight influence. The other 3 variables are indicators that the household will have more probability including more than 5 members in a household when the household has following properties: without electricity, male head, and more than one family living in the house.
+
+In the future, we can improve the model performance by adding more meaningful variables and reducing some variables like house age and household head age. 
+
+
+# Reference
+Sharma R. (2013). The Family and Family Structure Classification Redefined for the Current Times. Journal of family medicine and primary care, 2(4), 306–310. https://doi.org/10.4103/2249-4863.123774)
+
+Anderson, K. L., & Allen, W. R. (1984). Correlates of Extended Household Structure. Phylon (1960-), 45(2), 144–157. https://doi.org/10.2307/274476
+
+Hussien, W.A., Memon, F.A. & Savic, D.A. Assessing and Modelling the Influence of Household Characteristics on Per Capita Water Consumption. Water Resour Manage 30, 2931–2955 (2016). https://doi.org/10.1007/s11269-016-1314-x
+
