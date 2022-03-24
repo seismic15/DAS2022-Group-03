@@ -382,7 +382,8 @@ ggplot(household, aes(x = log(Food.exp), y = Members.no)) +
     theme(legend.position = "bottom")
 
 ```
-Then we try to divide income into two groups to find the difference. By setting the breakpoint 249,000 Peso, we obtained a plot of simple interaction regression lines between two variables. From the plot, we find that there is a significant difference on the intercepts and slopes. Thus, the two groups of incomes could make a difference. 
+Then we try to divide income into two groups to find the difference. By setting the breakpoint 249,000 Peso, we obtained a plot of simple interaction regression lines between two variables. From the plot, we find that the slopes difference between two lines are not very distinct. Thus, the two groups of incomes may not make a  significant difference. 
+ 
 
 ### Other group variables
 There are still three class variables and now we inspect their distributions.
