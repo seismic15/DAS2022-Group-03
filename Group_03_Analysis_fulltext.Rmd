@@ -642,7 +642,7 @@ p6 <- plot_model(model2, type = "pred", terms = "Household.Head.Sex", title = ""
 
 grid.arrange(p1, p2, p3, p4, p5, p6, ncol = 2)
 ```
-From the plot (a) in Figure \ref{fig:prob1}, the probability of members declines with the increase of household income. At first, it declines steeply and gradually become steady, while in contrast, from the plot (b), which is the plot of food expenditure, we witness that the line increases dramatically before 500,000 peso and then become flat. In plot (c) and (d), the slope of head of household age and house age decrease with steady paces. Besides, plot (e), (f) and (g) are plot of three categorical variables. Finally, we can conclude that more expenditure, houses with no electricity, male head of household and single type of relationship will lead to more family members. 
+From the plot (a) in Figure \ref{fig:prob1}, the probability of members declines with the increase of household income. At first, it declines steeply and gradually become steady, while in contrast, from the plot (b), which is the plot of food expenditure, we witness that the line increases dramatically before 100,000 peso and then become flat. In plot (c) and (d), the slope of head of household age and house age decrease with steady paces. Besides, plot (e), (f) and (g) are plot of three categorical variables. Finally, we can conclude that more expenditure, houses with no electricity, male head of household and single type of relationship will lead to more family members. 
 
 
 ```{r, fig.width = 4, fig.height = 3, fig.align = "center", fig.cap = "\\label{fig:prob2}The probability of more members (Part 2)", fig.pos = "H"}
