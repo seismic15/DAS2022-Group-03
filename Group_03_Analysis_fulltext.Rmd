@@ -498,7 +498,7 @@ $$
 $$
 where 
 
-- $p_i$ denotes the **Number of people living in the house**;
+- $p_i$ denotes the **Number of people living in the house (1 = 5 or more, 0 = less than 4)**;
 
 - $x_1$ denotes the **Annual household income (in Philippine peso)**;
 
@@ -508,7 +508,7 @@ where
 
 - $x_4$ denotes the **Age of the building (in years)**;
 
-- $x_5$ denotes the **Whether the house have electricity? (1=Yes, 0=No)**;
+- $x_5$ denotes the **Whether the house have electricity? (1 = Yes, 0 = No)**;
 
 - $x_6$ denotes the **Head of the households sex**;
 
